@@ -76,6 +76,7 @@ class Dataset(object):
         token_lengths = {}
         character_indices = {}
         character_indices_padded = {}
+
         for dataset_type in dataset_types:
             token_indices[dataset_type] = []
             characters[dataset_type] = []
@@ -122,16 +123,21 @@ class Dataset(object):
             
         return token_indices, label_indices, character_indices_padded, character_indices, token_lengths, characters, label_vector_indices
 
-    def update_dataset(self, dataset_filepaths, dataset_types):
+    def update_dataset(self, dataset_filepaths, dataset_types, text=None):
         '''
         dataset_filepaths : dictionary with keys 'train', 'valid', 'test', 'deploy'
         Overwrites the data of type specified in dataset_types using the existing token_to_index, character_to_index, and label_to_index mappings. 
         '''
         for dataset_type in dataset_types:
-            self.labels[dataset_type], self.tokens[dataset_type], _, _, _ = self._parse_dataset(dataset_filepaths.get(dataset_type, None))
-        
+            if text is None:
+                self.labels[dataset_type], self.tokens[dataset_type], _, _, _ = self._parse_dataset(dataset_filepaths.get(dataset_type, None))
+            else:
+                self.tokens[dataset_type], _, _, _, self.labels[dataset_type] = zip(*text)
+
+                self.tokens[dataset_type] = [self.tokens[dataset_type]]
+
         token_indices, label_indices, character_indices_padded, character_indices, token_lengths, characters, label_vector_indices = self._convert_to_indices(dataset_types)
-        
+
         self.token_indices.update(token_indices)
         self.label_indices.update(label_indices)
         self.character_indices_padded.update(character_indices_padded)

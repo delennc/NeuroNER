@@ -241,9 +241,13 @@ def main(argv=sys.argv):
     '''
     # Parse arguments
     arguments = parse_arguments(argv[1:])
+
+    print(arguments)
     
     nn = NeuroNER(**arguments)
-    nn.fit()
+    # nn.fit()
+    entities = nn.predict('www fresnobee com news local crime article179830941 html Sex offender Snyder could live in Fresno motel | The Fresno Bee Mobile & Apps Jeffrey Snyder  62  was allowed supervised release in June after serving prison time for molesting children. He may be moved to a motel just south of downtown Fresno. FRESNO COUNTY DISTRICT ATTORNEY S OFFICE Jeffrey Snyder  62  was allowed supervised release in June after serving prison time for molesting children. He may be moved to a motel just south of downtown Fresno. FRESNO COUNTY DISTRICT ATTORNEY S OFFICE Sexually violent predator Jeffrey Snyder could soon have a new place to live By Rory Appleton Order Reprint of this Story October 19  2017 3:11 PM The California Department of State Hospitals suggested a new option Thursday for housing 62-year-old Jeffrey Snyder  who was conditionally released in June after serving out a sentence for molesting children. The El Muir Motel at 2339 S. G St. is the proposed location. It is a one-story  6 400-square-foot building with 20 guest rooms located just south of downtown Fresno and west of Calwa near Golden State Boulevard. The Fresno County District Attorney s office is accepting public comment to include in its formal response in court. Anyone who wishes to submit a comment is asked to email damail@co.fresno.ca.us or mail to the office at 2220 Tulare St.  Suite 1000  Fresno CA 93721. Mailed comments should have  Attn: Sexual Assault Unit  written on the envelope. Snyder s placement has been a fierce topic of discussion for both law enforcement and the general public for almost a year . A proposed placement at a home in Squaw Valley was met with fierce opposition by neighbors  and the property eventually burned down. Of the 1 749 houses the state looked at  none met the required criteria for placement of a sexually violent offender. A group of Cal Fire firefighters confer after putting out a mobile home fire- where sex offender Jeffrey Snyder was to be housed- at Dunlap on Sage Lane in January. JOHN WALKER jwalker@fresnobee.com')
+    print(entities)
     nn.close() 
 
 if __name__ == "__main__":

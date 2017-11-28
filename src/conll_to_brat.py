@@ -20,11 +20,11 @@ def generate_reference_text_file_for_conll(conll_input_filepath, conll_output_fi
     character_index = 0
     document_count = 0
     text_base_filename = '{0}_text_{1}'.format(dataset_type, str(document_count).zfill(5))
-    for tok in conll_file:
-        split_tok = tok.strip().split(' ')
+    for line in conll_file:
+        split_line = line.strip().split(' ')
         # New document
-        if '-DOCSTART-' in split_tok[0]:
-            new_conll_string += tok
+        if '-DOCSTART-' in split_line[0]:
+            new_conll_string += line
             if len(text) != 0:
                 with codecs.open(os.path.join(text_folder, '{0}.txt'.format(text_base_filename)), 'w', 'UTF-8') as f:
                     f.write(text)
@@ -34,18 +34,18 @@ def generate_reference_text_file_for_conll(conll_input_filepath, conll_output_fi
             text_base_filename = '{0}_text_{1}'.format(dataset_type, str(document_count).zfill(5))
             continue            
         # New sentence
-        elif len(split_tok) == 0 or len(split_tok[0]) == 0:
+        elif len(split_line) == 0 or len(split_line[0]) == 0:
             new_conll_string += '\n'
             if text != '':
                 text += '\n'
                 character_index += 1
             continue
-        token = split_tok[0]
+        token = split_line[0]
         start = character_index
         end = start + len(token)
         text += token + ' '
         character_index += len(token) + 1
-        new_conll_string += ' '.join([token, text_base_filename, str(start), str(end)] + split_tok[1:]) + '\n' 
+        new_conll_string += ' '.join([token, text_base_filename, str(start), str(end)] + split_line[1:]) + '\n' 
     if len(text) != 0:
         with codecs.open(os.path.join(text_folder, '{0}.txt'.format(text_base_filename)), 'w', 'UTF-8') as f:
             f.write(text)
@@ -57,7 +57,7 @@ def generate_reference_text_file_for_conll(conll_input_filepath, conll_output_fi
 def check_compatibility_between_conll_and_brat_text(conll_filepath, brat_folder):
     '''
     check if token offsets match between conll and brat .txt files. 
-
+    
     conll_filepath: path to conll file
     brat_folder: folder that contains the .txt (and .ann) files that are formatted according to brat.
                                 
@@ -68,13 +68,13 @@ def check_compatibility_between_conll_and_brat_text(conll_filepath, brat_folder)
     conll_file = codecs.open(conll_filepath, 'r', 'UTF-8')
 
     previous_filename = ''
-    for tok in conll_file:
-        tok = tok.strip().split(' ')
+    for line in conll_file:
+        line = line.strip().split(' ')
         # New sentence
-        if len(tok) == 0 or len(tok[0]) == 0 or '-DOCSTART-' in tok[0]:
+        if len(line) == 0 or len(line[0]) == 0 or '-DOCSTART-' in line[0]:
             continue
         
-        filename = str(tok[1])
+        filename = str(line[1])
         # New file
         if filename != previous_filename:
             text_filepath = os.path.join(brat_folder, '{0}.txt'.format(filename))
@@ -82,12 +82,12 @@ def check_compatibility_between_conll_and_brat_text(conll_filepath, brat_folder)
                 text = f.read()
             previous_filename = filename 
             
-        label = str(tok[-1]).replace('_', '-') # For LOCATION-OTHER
+        label = str(line[-1]).replace('_', '-') # For LOCATION-OTHER
         
         token = {}
-        token['text'] = str(tok[0])
-        token['start'] = int(tok[2])
-        token['end'] = int(tok[3])
+        token['text'] = str(line[0])
+        token['start'] = int(line[2])
+        token['end'] = int(line[3])
 
         # check that the token text matches the original
         if token['text'] != text[token['start']:token['end']]:

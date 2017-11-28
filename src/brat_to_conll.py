@@ -191,7 +191,15 @@ def brat_to_conll(input_folder, output_filepath, tokenizer, language):
 
 def text_to_conll(input_text, tokenizer, language):
     '''
-    takes input text and returns list of tuples (in CONLL format)
+    Reformats text into CoNLL-formatted text
+
+    Args:
+        text (str): original body of text
+
+    Returns:
+        tokenized_text (list of tuples): CoNLL-formatted text, without predictions
+
+    CoNLL format: (text(str), 'predict_input', start_index(int), end_index(int), prediction(str))
     '''
     if tokenizer == 'spacy':
         spacy_nlp = spacy.load(language)
@@ -202,7 +210,6 @@ def text_to_conll(input_text, tokenizer, language):
     dataset_type = 'deploy'
     print("Formatting {0} set from TEXT to CONLL... ".format(dataset_type), end='')
 
-    #DELENN
     tokenized_text = []
         
     if tokenizer == 'spacy':
@@ -211,10 +218,12 @@ def text_to_conll(input_text, tokenizer, language):
         sentences = get_sentences_and_tokens_from_stanford(input_text, core_nlp)
     
     for sentence in sentences:
+        tokenized_sentence = []
         inside = False
         previous_token_label = 'O'
         for token in sentence:
-            tokenized_text.append((token['text'], 'predict_input', token['start'], token['end'], 'O'))
+            tokenized_sentence.append((token['text'], 'predict_input', token['start'], token['end'], 'O'))
+        tokenized_text.append(tokenized_sentence)
 
     print('Done.')
     if tokenizer == 'spacy':

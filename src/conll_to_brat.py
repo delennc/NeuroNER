@@ -116,7 +116,7 @@ def output_entities(brat_output_folder, previous_filename, entities, text_filepa
     if text_filepath != os.path.join(brat_output_folder, os.path.basename(text_filepath)):
         shutil.copy(text_filepath, brat_output_folder)
 
-def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_folder, brat_output_folder, overwrite=False, text=None):
+def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_folder, brat_output_folder, overwrite=False):
     '''
     convert conll file in conll-filepath to brat annotations and output to brat_output_folder, 
     with reference to the existing text files in brat_original_folder 
@@ -131,17 +131,16 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
                         .txt files are copied from brat_original_folder to brat_output_folder
     '''
     verbose = False
-    # dataset_type = utils.get_basename_without_extension(conll_input_filepath)
-    dataset_type = 'deploy'
+    dataset_type = utils.get_basename_without_extension(conll_input_filepath)
     print("Formatting {0} set from CONLL to BRAT... ".format(dataset_type), end='')
     
     # if brat_original_folder does not exist or have any text file
-    # if not os.path.exists(brat_original_folder) or len(glob.glob(os.path.join(brat_original_folder, '*.txt'))) == 0:
-    #     assert(conll_input_filepath != conll_output_filepath)
-    #     generate_reference_text_file_for_conll(conll_input_filepath, conll_output_filepath, brat_original_folder)
+    if not os.path.exists(brat_original_folder) or len(glob.glob(os.path.join(brat_original_folder, '*.txt'))) == 0:
+        assert(conll_input_filepath != conll_output_filepath)
+        generate_reference_text_file_for_conll(conll_input_filepath, conll_output_filepath, brat_original_folder)
 
-    # utils.create_folder_if_not_exists(brat_output_folder)
-    # conll_file = codecs.open(conll_output_filepath, 'r', 'UTF-8')
+    utils.create_folder_if_not_exists(brat_output_folder)
+    conll_file = codecs.open(conll_output_filepath, 'r', 'UTF-8')
 
     previous_token_label = 'O'
     previous_filename = ''
@@ -150,10 +149,10 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
     entity_id = 1
     entities = []
     entity = {}
-    for tok in conll_file:
-        tok = tok.strip().split(' ')
+    for line in conll_file:
+        line = line.strip().split(' ')
         # New sentence
-        if len(tok) == 0 or len(tok[0]) == 0 or '-DOCSTART-' in tok[0]:
+        if len(line) == 0 or len(line[0]) == 0 or '-DOCSTART-' in line[0]:
             # Add the last entity 
             if entity != {}:
                 if verbose: print("entity: {0}".format(entity))
@@ -163,7 +162,7 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
             previous_token_label = 'O'
             continue
         
-        filename = str(tok[1])
+        filename = str(line[1])
         # New file
         if filename != previous_filename:    
             output_entities(brat_output_folder, previous_filename, entities, text_filepath, text, overwrite=overwrite)
@@ -176,7 +175,7 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
             entities = []
             entity = {}
             
-        label = str(tok[-1]).replace('_', '-') # For LOCATION-OTHER
+        label = str(line[-1]).replace('_', '-') # For LOCATION-OTHER
         if label == 'O':
             # Previous entity ended
             if previous_token_label != 'O':
@@ -188,9 +187,9 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
             continue
         
         token = {}
-        token['text'] = str(tok[0])
-        token['start'] = int(tok[2])
-        token['end'] = int(tok[3])
+        token['text'] = str(line[0])
+        token['start'] = int(line[2])
+        token['end'] = int(line[3])
         # check that the token text matches the original
         if token['text'] != text[token['start']:token['end']].replace(' ', '-'):
             print("Warning: conll and brat text do not match.")
@@ -209,12 +208,12 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
         elif label[:2] == 'I-':
             # Entity continued
             if previous_token_label == token['label']:
-                # if there is no newtok between the entity and the token
+                # if there is no newline between the entity and the token
                 if '\n' not in text[entity['end']:token['start']]:
                     # Update entity 
                     entity['text'] = entity['text'] + ' ' + token['text']
                     entity['end'] = token['end']
-                else: # newtok between the entity and the token
+                else: # newline between the entity and the token
                     # End the previous entity
                     if verbose: print("entity: {0}".format(entity))
                     entities.append(entity)
@@ -234,25 +233,36 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
                 # Start new entity
                 entity = token
         previous_token_label = token['label']
-    # output_entities(brat_output_folder, previous_filename, entities, text_filepath, text, overwrite=overwrite)
+    output_entities(brat_output_folder, previous_filename, entities, text_filepath, text, overwrite=overwrite)
     conll_file.close()
     print('Done.')
 
     return entities
 
-def output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder, overwrite=False, text=None):
+def output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder, overwrite=False):
     # Output brat files
-    # for dataset_type in ['train', 'valid', 'test', 'deploy']:
-    #     if dataset_type not in output_filepaths.keys():
-    #         continue
-        # brat_output_folder = os.path.join(stats_graph_folder, 'brat', dataset_type)
-        # utils.create_folder_if_not_exists(brat_output_folder)
-    dataset_type = 'deploy'
-    conll_to_brat(output_filepaths[dataset_type], output_filepaths[dataset_type], dataset_brat_folders[dataset_type], brat_output_folder, overwrite=overwrite, text=None)
-
+    for dataset_type in ['train', 'valid', 'test', 'deploy']:
+        if dataset_type not in output_filepaths.keys():
+            continue
+        brat_output_folder = os.path.join(stats_graph_folder, 'brat', dataset_type)
+        utils.create_folder_if_not_exists(brat_output_folder)
+        conll_to_brat(output_filepaths[dataset_type], output_filepaths[dataset_type], dataset_brat_folders[dataset_type], brat_output_folder, overwrite=overwrite)
 
 def conll_to_entities(conll_text, text):
+    '''
+    Reformats CoNLL-formatted text entities to a list of entities
 
+    Args:
+        conll_text (list of tuples): CoNLL-formatted text -- list of text tokens in the CoNLL format
+        text (str): original body of text
+
+    Returns:
+        entities (list of entities): list of all entities found in text
+
+
+    CoNLL format: (text(str), 'predict_input', start_index(int), end_index(int), prediction(str))
+    Entity format: {'text': str, 'start': int, 'end': int, 'label': str, 'id': str}
+    '''
     previous_token_label = 'O'
     previous_filename = ''
     entity_id = 1

@@ -19,7 +19,7 @@ class Dataset(object):
         self.verbose = verbose
         self.debug = debug
 
-    def _parse_dataset(self, dataset_filepath):
+    def _parse_dataset(self, dataset_filepath, text=None):
         token_count = collections.defaultdict(lambda: 0)
         label_count = collections.defaultdict(lambda: 0)
         character_count = collections.defaultdict(lambda: 0)
@@ -29,35 +29,48 @@ class Dataset(object):
         labels = []
         new_token_sequence = []
         new_label_sequence = []
-        if dataset_filepath:
-            f = codecs.open(dataset_filepath, 'r', 'UTF-8')
-            for line in f:
-                line_count += 1
-                line = line.strip().split(' ')
-                if len(line) == 0 or len(line[0]) == 0 or '-DOCSTART-' in line[0]:
-                    if len(new_token_sequence) > 0:
-                        labels.append(new_label_sequence)
-                        tokens.append(new_token_sequence)
-                        new_token_sequence = []
-                        new_label_sequence = []
-                    continue
-                token = str(line[0])
-                label = str(line[-1])
-                token_count[token] += 1
-                label_count[label] += 1
+        if text is None:
+            if dataset_filepath:
+                f = codecs.open(dataset_filepath, 'r', 'UTF-8')
+                for line in f:
+                    line_count += 1
+                    line = line.strip().split(' ')
+                    if len(line) == 0 or len(line[0]) == 0 or '-DOCSTART-' in line[0]:
+                        if len(new_token_sequence) > 0:
+                            labels.append(new_label_sequence)
+                            tokens.append(new_token_sequence)
+                            new_token_sequence = []
+                            new_label_sequence = []
+                        continue
+                    token = str(line[0])
+                    label = str(line[-1])
+                    token_count[token] += 1
+                    label_count[label] += 1
 
-                new_token_sequence.append(token)
-                new_label_sequence.append(label)
+                    new_token_sequence.append(token)
+                    new_label_sequence.append(label)
 
-                for character in token:
-                    character_count[character] += 1
+                    for character in token:
+                        character_count[character] += 1
 
-                if self.debug and line_count > 200: break# for debugging purposes
+                    if self.debug and line_count > 200: break# for debugging purposes
 
-            if len(new_token_sequence) > 0:
-                labels.append(new_label_sequence)
-                tokens.append(new_token_sequence)
-            f.close()
+                if len(new_token_sequence) > 0:
+                    labels.append(new_label_sequence)
+                    tokens.append(new_token_sequence)
+                f.close()
+
+        else:
+            tokens, _, _, _, labels = list(zip(*[list(zip(*x)) for x in text]))
+
+            for sent in text:
+                for tok in sent:
+                    token_count[tok[0]] += 1
+                    label_count[tok[4]] += 1
+
+                    for character in tok[0]:
+                        character_count[character] += 1
+
         return labels, tokens, token_count, label_count, character_count
 
 
@@ -76,6 +89,7 @@ class Dataset(object):
         token_lengths = {}
         character_indices = {}
         character_indices_padded = {}
+
         for dataset_type in dataset_types:
             token_indices[dataset_type] = []
             characters[dataset_type] = []
@@ -122,16 +136,20 @@ class Dataset(object):
             
         return token_indices, label_indices, character_indices_padded, character_indices, token_lengths, characters, label_vector_indices
 
-    def update_dataset(self, dataset_filepaths, dataset_types):
+    def update_dataset(self, dataset_filepaths, dataset_types, text=None):
         '''
         dataset_filepaths : dictionary with keys 'train', 'valid', 'test', 'deploy'
         Overwrites the data of type specified in dataset_types using the existing token_to_index, character_to_index, and label_to_index mappings. 
         '''
         for dataset_type in dataset_types:
-            self.labels[dataset_type], self.tokens[dataset_type], _, _, _ = self._parse_dataset(dataset_filepaths.get(dataset_type, None))
-        
+            if text is None:
+                self.labels[dataset_type], self.tokens[dataset_type], _, _, _ = self._parse_dataset(dataset_filepaths.get(dataset_type, None))
+            else:
+                # this only happens when calling 'predict' from neuroner.py
+                self.tokens[dataset_type], _, _, _, self.labels[dataset_type] = list(zip(*[list(zip(*x)) for x in text]))
+
         token_indices, label_indices, character_indices_padded, character_indices, token_lengths, characters, label_vector_indices = self._convert_to_indices(dataset_types)
-        
+
         self.token_indices.update(token_indices)
         self.label_indices.update(label_indices)
         self.character_indices_padded.update(character_indices_padded)

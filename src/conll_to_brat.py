@@ -57,7 +57,7 @@ def generate_reference_text_file_for_conll(conll_input_filepath, conll_output_fi
 def check_compatibility_between_conll_and_brat_text(conll_filepath, brat_folder):
     '''
     check if token offsets match between conll and brat .txt files. 
-
+    
     conll_filepath: path to conll file
     brat_folder: folder that contains the .txt (and .ann) files that are formatted according to brat.
                                 
@@ -237,6 +237,8 @@ def conll_to_brat(conll_input_filepath, conll_output_filepath, brat_original_fol
     conll_file.close()
     print('Done.')
 
+    return entities
+
 def output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder, overwrite=False):
     # Output brat files
     for dataset_type in ['train', 'valid', 'test', 'deploy']:
@@ -245,3 +247,85 @@ def output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder, over
         brat_output_folder = os.path.join(stats_graph_folder, 'brat', dataset_type)
         utils.create_folder_if_not_exists(brat_output_folder)
         conll_to_brat(output_filepaths[dataset_type], output_filepaths[dataset_type], dataset_brat_folders[dataset_type], brat_output_folder, overwrite=overwrite)
+
+def conll_to_entities(conll_text, text):
+    '''
+    Reformats CoNLL-formatted text entities to a list of entities
+
+    Args:
+        conll_text (list of tuples): CoNLL-formatted text -- list of text tokens in the CoNLL format
+        text (str): original body of text
+
+    Returns:
+        entities (list of entities): list of all entities found in text
+
+
+    CoNLL format: (text(str), 'predict_input', start_index(int), end_index(int), prediction(str))
+    Entity format: {'text': str, 'start': int, 'end': int, 'label': str, 'id': str}
+    '''
+    previous_token_label = 'O'
+    previous_filename = ''
+    entity_id = 1
+    entities = []
+    entity = {}
+    for tok in conll_text:
+        label = str(tok[-1]).replace('_', '-') # For LOCATION-OTHER
+        if label == 'O':
+            # Previous entity ended
+            if previous_token_label != 'O':
+                entity['id'] = 'E_' + str(entity_id)
+                entities.append(entity)
+                entity_id += 1
+                entity = {}
+            previous_token_label = 'O'
+            continue
+        
+        token = {}
+        token['text'] = str(tok[0])
+        token['start'] = int(tok[2])
+        token['end'] = int(tok[3])
+        # check that the token text matches the original
+        if token['text'] != text[token['start']:token['end']].replace(' ', '-'):
+            print("Warning: conll and text do not match.")
+            print("\tCONLL: {0}".format(token['text']))
+            print("\tTEXT : {0}".format(text[token['start']:token['end']]))
+        token['label'] = label[2:]
+    
+        if label[:2] == 'B-':
+            if previous_token_label != 'O':
+                # End the previous entity
+                entity['id'] = 'E_' + str(entity_id)
+                entities.append(entity)
+                entity_id += 1
+            # Start a new entity
+            entity = token
+        elif label[:2] == 'I-':
+            # Entity continued
+            if previous_token_label == token['label']:
+                # if there is no newline between the entity and the token
+                if '\n' not in text[entity['end']:token['start']]:
+                    # Update entity 
+                    entity['text'] = entity['text'] + ' ' + token['text']
+                    entity['end'] = token['end']
+                else: # newline between the entity and the token
+                    # End the previous entity
+                    entity['id'] = 'E_' + str(entity_id)
+                    entities.append(entity)
+                    entity_id += 1
+                    # Start a new entity
+                    entity = token
+            elif previous_token_label != 'O':
+                # TODO: count BI or II incompatibility
+                # End the previous entity
+                entity['id'] = 'E_' + str(entity_id)
+                entities.append(entity)
+                entity_id += 1
+                # Start new entity
+                entity = token
+            else: # previous_token_label == 'O'
+                # TODO: count  OI incompatibility
+                # Start new entity
+                entity = token
+        previous_token_label = token['label']
+
+    return entities

@@ -28,16 +28,31 @@ def train_step(sess, dataset, sequence_number, model, parameters):
                     feed_dict)
     return transition_params_trained
 
-def prediction_step(sess, dataset, dataset_type, model, transition_params_trained, stats_graph_folder, epoch_number, parameters, dataset_filepaths):
+def prediction_step(sess, dataset, dataset_type, model, transition_params_trained, stats_graph_folder, epoch_number, parameters, dataset_filepaths, text=None):
+    '''
+    Uses the model to predict entities in text
+
+    Added keyword args:
+        text (list of tuples): text tokenized to CoNLL format (without prediction)
+
+    Returns:
+        pred_tuples (list of tuples): same as text, with a predicted label appended to each token (CoNLL format)
+
+
+    CoNLL format: (text(str), 'predict_input', start_index(int), end_index(int), prediction(str))
+    '''
     if dataset_type == 'deploy':
         print('Predict labels for the {0} set'.format(dataset_type))
     else:
         print('Evaluate model on the {0} set'.format(dataset_type))
-    all_predictions = []
-    all_y_true = []
-    output_filepath = os.path.join(stats_graph_folder, '{1:03d}_{0}.txt'.format(dataset_type,epoch_number))
-    output_file = codecs.open(output_filepath, 'w', 'UTF-8')
-    original_conll_file = codecs.open(dataset_filepaths[dataset_type], 'r', 'UTF-8')
+    if dataset_type != 'deploy':
+        all_predictions = []
+        all_y_true = []
+        output_filepath = os.path.join(stats_graph_folder, '{1:03d}_{0}.txt'.format(dataset_type,epoch_number))
+        output_file = codecs.open(output_filepath, 'w', 'UTF-8')
+        original_conll_file = codecs.open(dataset_filepaths[dataset_type], 'r', 'UTF-8')
+    else:
+        pred_tuples = []
 
     for i in range(len(dataset.token_indices[dataset_type])):
         feed_dict = {
@@ -55,36 +70,47 @@ def prediction_step(sess, dataset, dataset_type, model, transition_params_traine
             predictions = predictions.tolist()
 
         assert(len(predictions) == len(dataset.tokens[dataset_type][i]))
+
         output_string = ''
         prediction_labels = [dataset.index_to_label[prediction] for prediction in predictions]
-        gold_labels = dataset.labels[dataset_type][i]
+        if dataset_type != 'deploy':
+            gold_labels = dataset.labels[dataset_type][i]
         if parameters['tagging_format'] == 'bioes':
             prediction_labels = utils_nlp.bioes_to_bio(prediction_labels)
-            gold_labels = utils_nlp.bioes_to_bio(gold_labels)
-        for prediction, token, gold_label in zip(prediction_labels, dataset.tokens[dataset_type][i], gold_labels):
-            while True:
-                line = original_conll_file.readline()
-                split_line = line.strip().split(' ')
-                if '-DOCSTART-' in split_line[0] or len(split_line) == 0 or len(split_line[0]) == 0:
-                    continue
-                else:
-                    token_original = split_line[0]
-                    if parameters['tagging_format'] == 'bioes':
-                        split_line.pop()
-                    gold_label_original = split_line[-1]
-                    assert(token == token_original and gold_label == gold_label_original) 
-                    break            
-            split_line.append(prediction)
-            output_string += ' '.join(split_line) + '\n'
-        output_file.write(output_string+'\n')
+            if dataset_type != 'deploy':
+                gold_labels = utils_nlp.bioes_to_bio(gold_labels)
 
-        all_predictions.extend(predictions)
-        all_y_true.extend(dataset.label_indices[dataset_type][i])
+        if dataset_type != 'deploy':
+            for prediction, token, gold_label in zip(prediction_labels, dataset.tokens[dataset_type][i], gold_labels):
+                while True:
+                    line = original_conll_file.readline()
+                    split_line = line.strip().split(' ')
+                    if '-DOCSTART-' in split_line[0] or len(split_line) == 0 or len(split_line[0]) == 0:
+                        continue
+                    else:
+                        token_original = split_line[0]
+                        if parameters['tagging_format'] == 'bioes':
+                            split_line.pop()
+                        gold_label_original = split_line[-1]
+                        assert(token == token_original and gold_label == gold_label_original) 
+                        break            
+                split_line.append(prediction)
+                pred_tuples.append(split_line)
+                output_string += ' '.join(split_line) + '\n'
+            output_file.write(output_string+'\n')
 
-    output_file.close()
-    original_conll_file.close()
+            all_predictions.extend(predictions)
+            all_y_true.extend(dataset.label_indices[dataset_type][i])
+
+        else:
+            for prediction, token, text_tok in zip(prediction_labels, dataset.tokens[dataset_type][i], text[i]):
+                assert token == text_tok[0]
+                pred_tuples.append((text_tok[0], text_tok[1], text_tok[2], text_tok[3], prediction))
 
     if dataset_type != 'deploy':
+        output_file.close()
+        original_conll_file.close()
+
         if parameters['main_evaluation_mode'] == 'conll':
             conll_evaluation_script = os.path.join('.', 'conlleval')
             conll_output_filepath = '{0}_conll_evaluation.txt'.format(output_filepath)
@@ -97,7 +123,9 @@ def prediction_step(sess, dataset, dataset_type, model, transition_params_traine
             new_y_pred, new_y_true, new_label_indices, new_label_names, _, _ = remap_labels(all_predictions, all_y_true, dataset, parameters['main_evaluation_mode'])
             print(sklearn.metrics.classification_report(new_y_true, new_y_pred, digits=4, labels=new_label_indices, target_names=new_label_names))
 
-    return all_predictions, all_y_true, output_filepath
+        return all_predictions, all_y_true, output_filepath
+
+    return pred_tuples
 
 
 def predict_labels(sess, model, transition_params_trained, parameters, dataset, epoch_number, stats_graph_folder, dataset_filepaths):

@@ -19,7 +19,7 @@ import pickle
 import brat_to_conll
 import numpy as np
 import utils_nlp
-import distutils
+import distutils.util
 import configparser
 from pprint import pprint
 # http://stackoverflow.com/questions/42217532/tensorflow-version-1-0-0-rc2-on-windows-opkernel-op-bestsplits-device-typ
@@ -50,7 +50,7 @@ class NeuroNER(object):
         Command line arguments take precedence over parameters specified in the parameter file.
         '''
         parameters = {'pretrained_model_folder':'../trained_models/conll_2003_en',
-                      'dataset_text_folder':'../data/conll2003/en',
+                      'dataset_text_folder':'../data/dataset',
                       'character_embedding_dimension':25,
                       'character_lstm_hidden_state_dimension':25,
                       'check_for_digits_replaced_with_zeros':True,
@@ -84,10 +84,10 @@ class NeuroNER(object):
                       'token_lstm_hidden_state_dimension':100,
                       'token_pretrained_embedding_filepath':'../data/word_vectors/glove.6B.100d.txt',
                       'tokenizer':'spacy',
-                      'train_model':True,
+                      'train_model':False,
                       'use_character_lstm':True,
                       'use_crf':True,
-                      'use_pretrained_model':False,
+                      'use_pretrained_model':True,
                       'verbose':False}
         # If a parameter file is specified, load it
         if len(parameters_filepath) > 0:
@@ -116,6 +116,7 @@ class NeuroNER(object):
                      'reload_character_embeddings', 'reload_character_lstm', 'reload_token_embeddings', 'reload_token_lstm', 'reload_feedforward', 'reload_crf',
                      'check_for_lowercase', 'check_for_digits_replaced_with_zeros', 'freeze_token_embeddings', 'load_only_pretrained_token_embeddings', 'load_all_pretrained_token_embeddings']:
                 parameters[k] = distutils.util.strtobool(v)
+        
         # If loading pretrained model, set the model hyperparameters according to the pretraining parameters 
         if parameters['use_pretrained_model']:
             pretraining_parameters = self._load_parameters(parameters_filepath=os.path.join(parameters['pretrained_model_folder'], 'parameters.ini'), verbose=False)[0]
@@ -182,7 +183,7 @@ class NeuroNER(object):
                 bioes_filepath = os.path.join(parameters['dataset_text_folder'], '{0}_bioes.txt'.format(utils.get_basename_without_extension(dataset_filepaths[dataset_type])))
                 utils_nlp.convert_conll_from_bio_to_bioes(dataset_filepaths[dataset_type], bioes_filepath)
                 dataset_filepaths[dataset_type] = bioes_filepath
-    
+
         return dataset_filepaths, dataset_brat_folders
     
     def _check_parameter_compatiblity(self, parameters, dataset_filepaths):
@@ -253,6 +254,7 @@ class NeuroNER(object):
         # Parse arguments
         arguments = dict( (k,str(v)) for k,v in locals().items() if k !='self')
         
+
         # Initialize parameters
         parameters, conf_parameters = self._load_parameters(arguments['parameters_filepath'], arguments=arguments)
         dataset_filepaths, dataset_brat_folders = self._get_valid_dataset_filepaths(parameters)
@@ -439,44 +441,30 @@ class NeuroNER(object):
             writers[dataset_type].close()
 
     def predict(self, text):
-        self.prediction_count += 1        
-        
-        if self.prediction_count == 1:
-            self.parameters['dataset_text_folder'] = os.path.join('..', 'data', 'temp')
-            self.stats_graph_folder, _ = self._create_stats_graph_folder(self.parameters)
-        
-        # Update the deploy folder, file, and dataset 
+        '''
+        Extracts named entities from the given text
+
+        Args:
+            text (str): body of text to extract named entities from
+
+        Returns:
+            entities (list of entities): list of all entities found in text
+
+        Entity format: {'text': str, 'start': int, 'end': int, 'label': str, 'id': str}
+        '''
+        self.stats_graph_folder = 'NONE'
         dataset_type = 'deploy'
-        ### Delete all deployment data    
-        for filepath in glob.glob(os.path.join(self.parameters['dataset_text_folder'], '{0}*'.format(dataset_type))):
-            if os.path.isdir(filepath): 
-                shutil.rmtree(filepath)
-            else:
-                os.remove(filepath)
-        ### Create brat folder and file
-        dataset_brat_deploy_folder = os.path.join(self.parameters['dataset_text_folder'], dataset_type)
-        utils.create_folder_if_not_exists(dataset_brat_deploy_folder)
-        dataset_brat_deploy_filepath = os.path.join(dataset_brat_deploy_folder, 'temp_{0}.txt'.format(str(self.prediction_count).zfill(5)))#self._get_dataset_brat_deploy_filepath(dataset_brat_deploy_folder) 
-        with codecs.open(dataset_brat_deploy_filepath, 'w', 'UTF-8') as f:
-            f.write(text)
-        ### Update deploy filepaths
-        dataset_filepaths, dataset_brat_folders = self._get_valid_dataset_filepaths(self.parameters, dataset_types=[dataset_type])
-        self.dataset_filepaths.update(dataset_filepaths)
-        self.dataset_brat_folders.update(dataset_brat_folders)        
-        ### Update the dataset for the new deploy set
-        self.dataset.update_dataset(self.dataset_filepaths, [dataset_type])
+
+        # Tokenize text into CoNLL format
+        tokenized_text = brat_to_conll.text_to_conll(text, self.parameters['tokenizer'], self.parameters['spacylanguage'])
+ 
+        ### Update the dataset for the new text
+        self.dataset.update_dataset(self.dataset_filepaths, [dataset_type], text=tokenized_text)
         
-        # Predict labels and output brat
-        output_filepaths = {}
-        prediction_output = train.prediction_step(self.sess, self.dataset, dataset_type, self.model, self.transition_params_trained, self.stats_graph_folder, self.prediction_count, self.parameters, self.dataset_filepaths)
-        _, _, output_filepaths[dataset_type] = prediction_output
-        conll_to_brat.output_brat(output_filepaths, self.dataset_brat_folders, self.stats_graph_folder, overwrite=True)
-        
-        # Print and output result
-        text_filepath = os.path.join(self.stats_graph_folder, 'brat', 'deploy', os.path.basename(dataset_brat_deploy_filepath))
-        annotation_filepath = os.path.join(self.stats_graph_folder, 'brat', 'deploy', '{0}.ann'.format(utils.get_basename_without_extension(dataset_brat_deploy_filepath)))
-        text2, entities = brat_to_conll.get_entities_from_brat(text_filepath, annotation_filepath, verbose=True)
-        assert(text == text2)
+        # Predict labels and output entities
+        prediction_output = train.prediction_step(self.sess, self.dataset, dataset_type, self.model, self.transition_params_trained, self.stats_graph_folder, self.prediction_count, self.parameters, self.dataset_filepaths, text=tokenized_text)
+        entities = conll_to_brat.conll_to_entities(prediction_output, text)
+
         return entities
     
     def get_params(self):

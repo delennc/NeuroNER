@@ -13,6 +13,7 @@ def get_start_and_end_offset_of_token_from_spacy(token):
     end = start + len(token)
     return start, end
 
+
 def get_sentences_and_tokens_from_spacy(text, spacy_nlp):
     document = spacy_nlp(text)
     # sentences
@@ -21,9 +22,12 @@ def get_sentences_and_tokens_from_spacy(text, spacy_nlp):
         sentence = [document[i] for i in range(span.start, span.end)]
         sentence_tokens = []
         for token in sentence:
-            token_dict = {}
-            token_dict['start'], token_dict['end'] = get_start_and_end_offset_of_token_from_spacy(token)
-            token_dict['text'] = text[token_dict['start']:token_dict['end']]
+            tup = get_start_and_end_offset_of_token_from_spacy(token)
+            token_dict = {
+                'start': tup[0],
+                'end': tup[1],
+                'text': text[token_dict['start']:token_dict['end']]
+            }
             if token_dict['text'].strip() in ['\n', '\t', ' ', '']:
                 continue
             # Make sure that the token text does not contain any space
@@ -35,6 +39,7 @@ def get_sentences_and_tokens_from_spacy(text, spacy_nlp):
         sentences.append(sentence_tokens)
     return sentences
 
+
 def get_stanford_annotations(text, core_nlp, port=9000, annotators='tokenize,ssplit,pos,lemma'):
     output = core_nlp.annotate(text, properties={
         "timeout": "10000",
@@ -45,6 +50,7 @@ def get_stanford_annotations(text, core_nlp, port=9000, annotators='tokenize,ssp
     if type(output) is str:
         output = json.loads(output, strict=False)
     return output
+
 
 def get_sentences_and_tokens_from_stanford(text, core_nlp):
     stanford_output = get_stanford_annotations(text, core_nlp)
@@ -65,6 +71,7 @@ def get_sentences_and_tokens_from_stanford(text, core_nlp):
             tokens.append(token)
         sentences.append(tokens)
     return sentences
+
 
 def get_entities_from_brat(text_filepath, annotation_filepath, verbose=False):
     # load text
@@ -100,6 +107,7 @@ def get_entities_from_brat(text_filepath, annotation_filepath, verbose=False):
     
     return text, entities
 
+
 def check_brat_annotation_and_text_compatibility(brat_folder):
     '''
     Check if brat annotation and text files are compatible.
@@ -115,6 +123,7 @@ def check_brat_annotation_and_text_compatibility(brat_folder):
             raise IOError("Annotation file does not exist: {0}".format(annotation_filepath))
         text, entities = get_entities_from_brat(text_filepath, annotation_filepath)
     print("Done.")
+
 
 def brat_to_conll(input_folder, output_filepath, tokenizer, language):
     '''
